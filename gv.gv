@@ -1,9 +1,23 @@
-digraph Tree{
+graph Tree{
+  "NWLRB";
+  "NWLRB" -- "CBYNE";
+  "QBHCD";
+  "QBHCD" -- "IDDQS";
+  "ZOWKK";
+  "ZOWKK" -- "RXSJY";
+  "ZOWKK" -- "NWLRB";
+  "IDDQS";
+  "XRJMO";
+  "XRJMO" -- "RXSJY";
+  "XRJMO" -- "CBYNE";
+  "XRJMO" -- "LOREL";
+  "XRJMO" -- "IDDQS";
+  "RXSJY";
+  "DBEFS";
+  "CBYNE";
+  "YGGXX";
+  "YGGXX" -- "DBEFS";
+  "YGGXX" -- "XRJMO";
+  "LOREL";
   "A";
-  "A" -> "C";
-  "C";
-  "C" -> "B";
-  "C" -> "A";
-  "B";
-  "B" -> "C";
 }

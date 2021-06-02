@@ -22,6 +22,10 @@ typedef struct _Gtable{
 #include <string.h>
 #include "list.h"
 #include "queue.h"
+#include "rnd_data.h"
+#include "time.h"
+
+#define REPCOUNT 10
 
 int get_int(int *a);
 Gtable *g_init(void);
@@ -33,8 +37,12 @@ void remove_vertex(Gtable *table);
 void remove_edge(Gtable *table);
 void draw_graph(Gtable *table);
 void find_vertex(Gtable *table);
-//void ostov(Gtable *table);
 Gtable *ostov_gtable(Gtable *table);
+void find_way(Gtable *table);
+Gtable *rnd_graph(void);
+Gtable *graph_load(void);
+int graph_unload(Gtable *table);
+void timing_search(void);
 
 
 #endif

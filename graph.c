@@ -31,13 +31,13 @@ static char *get_str(void){
 }
 
 
-static char *fget_str(FILE *file){
+char *fget_str(FILE *file) {
     char buf[81] = {0};
     char *res = NULL;
     int len = 0;
     int n = 0;
     do {
-        n = fscanf(file, "%80[^\n]", buf);
+        n = fscanf(file, "%80[^\n\r ]", buf);
         if (n == EOF) return NULL;
         else if (n < 0) {
             if (!res) {
@@ -50,10 +50,9 @@ static char *fget_str(FILE *file){
             memcpy(res + len, buf, chunk_len);
             len = str_len;
         } else {
-            fscanf(file, "%*c");
+            fscanf(file, "\r\n");
         }
     } while (n > 0);
-
     if (len > 0) {
         res[len] = '\0';
     } else {
@@ -144,6 +143,16 @@ static Vertex *create_vertex(Gtable *table){
 	get_int(&x);
 	printf("Enter the y position\n");
 	get_int(&y);
+	vertex = (Vertex*)malloc(1*sizeof(Vertex));
+	vertex->name = name;
+	vertex->x = x;
+	vertex->y = y;
+	return vertex;
+}
+
+
+static Vertex *create_vertex_static(char *name, int x, int y){
+	Vertex *vertex = NULL;
 	vertex = (Vertex*)malloc(1*sizeof(Vertex));
 	vertex->name = name;
 	vertex->x = x;
@@ -299,13 +308,15 @@ void print_table(Gtable *table){
 
 
 static void create_meta_code_for_gv(Gtable *table, FILE *file){
-	fprintf(file, "digraph Tree{\n");
+	fprintf(file, "graph Tree{\n");
 	Vertex *edge = NULL;
 	for (int i=0; i<table->count_line; i++){
 		fprintf(file, "  \"%s\";\n", table->line[i].self->name);
 		for (int j=0; j<list_len(table->line[i].other_list); j++){
 			list_take(table->line[i].other_list, j, &edge);
-			fprintf(file, "  \"%s\" -> \"%s\";\n", table->line[i].self->name, edge->name);
+			if (strcmp(table->line[i].self->name, edge->name)>0){
+				fprintf(file, "  \"%s\" -- \"%s\";\n", table->line[i].self->name, edge->name);
+			}
 		}
 	}
 	fprintf(file, "}\n");
@@ -496,16 +507,228 @@ Gtable *ostov_gtable(Gtable *table){
 }
 
 
-/*
-void ostov(Gtable *table){
-	Gtable *new_table = NULL;
-	new_table = ostov_gtable(table);
-	printf("Ostov found\n");
-	print_table(new_table);
-	draw_graph(new_table);
-	del_table(new_table);
+static int get_index_in_table(Gtable *table, Vertex *vertex){
+	int i = 0;
+	while(table->line[i].self != vertex) i++;
+	return i;
 }
-*/
 
 
+static int *find_way_by_src(Gtable *table, Vertex *src){
+	int *dist = (int*)malloc(table->count_line*sizeof(int));
+	for (int i=0; i<table->count_line; i++){
+		if (table->line[i].self == src){
+			dist[i] = 0;
+		} else{
+			dist[i] = -1; // -1 is inf
+		}
+	}
+	for (int i=0; i<(table->count_line-1); i++){
+		for (int j=0; j<table->count_line; j++){
+			for (int k=0; k<list_len(table->line[j].other_list); k++){
+				Vertex *other_vertex = NULL;
+				list_take(table->line[j].other_list, k, &other_vertex);
+				int other_vertex_index = get_index_in_table(table, other_vertex);
+				if (dist[other_vertex_index]!=-1){
+					if (dist[j]!=-1){
+						if (dist[j]>dist[other_vertex_index]+1){
+							dist[j] = dist[other_vertex_index]+1;
+						}
+					} else{
+						dist[j] = dist[other_vertex_index]+1;
+					}
+				}
+			}
+		}
+	}
+	return dist;
+}
+
+
+void find_way(Gtable *table){
+	printf("Enter the vertex name\n");
+	char *name;
+	scanf("%*c");
+	name = enter_vertex_name(table, 0);
+	Vertex *src = find_vertex_by_name(table, name);
+	int *dist = find_way_by_src(table, src);
+	printf("Dist mas form %s:\n", src->name);
+	for (int i=0; i<table->count_line; i++){
+		printf("%s -> %d\n", table->line[i].self->name, dist[i]);
+	}
+	free(dist);
+	free(name);
+}
+
+
+static char *rnd_vertex_name(Gtable *table, int new){
+	char *name = NULL;
+	if (new){
+		int code = 0;
+		do{
+			code = 0;
+			if (name){
+				free(name);
+				name = NULL;
+			}
+			name = rnd_str(5);
+			if (find_vertex_by_name(table, name)){
+				code = 1;
+			}
+		} while (code);
+	} else{
+		char *string = table->line[rnd_int(0, table->count_line-1)].self->name;
+		name = (char*)malloc((strlen(string)+1)*sizeof(char));
+		memcpy(name, string, (strlen(string)+1)*sizeof(char));
+	}
+	return name;
+}
+
+
+static Gtable *rnd_graph_static(int count_vertex, int count_edge){
+	Gtable *table = g_init();
+	for (int i=0; i<count_vertex; i++){
+		char *name = NULL;
+		name = rnd_vertex_name(table, 1);
+		Vertex *vertex = create_vertex_static(name, rnd_int(0, 50), rnd_int(0, 50));
+		add_vertex_static(table, vertex);
+	}
+	for (int i=0; i<count_edge; i++){
+		char *first_name = NULL;
+		char *second_name = NULL;
+		first_name = rnd_vertex_name(table, 0);
+		second_name = rnd_vertex_name(table, 0);
+		while(!strcmp(first_name, second_name)) {
+			free(second_name);
+			second_name = rnd_vertex_name(table, 0);
+		}
+		Vertex *first = NULL;
+		Vertex *second = NULL;
+		first = find_vertex_by_name(table, first_name);
+		second = find_vertex_by_name(table, second_name);
+		free(first_name);
+		free(second_name);
+		add_edge_static(table, first, second);
+	}
+	return table;
+}
+
+
+Gtable *rnd_graph(void){
+	printf("Enter the vertex count (min 2)\n");
+	int vertex_count = 0;
+	int edge_count = 0;
+	get_int(&vertex_count);
+	if (vertex_count<2) vertex_count = 2;
+	printf("Enter the edge count\n");
+	get_int(&edge_count);
+	return rnd_graph_static(vertex_count, edge_count);
+}
+
+
+Gtable *graph_load(void){
+	//printf("E1\n");
+	char name[] = "mem.txt";
+	char *vertex_name = NULL;
+	char *second_vertex_name = NULL;
+	Vertex *vertex = NULL;
+	Vertex *second_vertex = NULL;
+	FILE *file;
+	Gtable *table = g_init();
+	if ((file = fopen(name, "r")) == NULL){
+		printf("File not found\n");
+		return NULL;
+	}
+	int count = 0;
+	int path = -1; // 0 start vertex input, 1 end -//-, 2 start edge input, 3 end -//-
+	//printf("E2\n");
+	while (1){
+		vertex_name = fget_str(file);
+		if (vertex_name==NULL){
+			break;
+		}
+		if (strcmp(vertex_name, "{")==0 || strcmp(vertex_name, "}")==0){
+			path++;
+			free(vertex_name);
+		} else{
+			if (path==0){
+				vertex = create_vertex_static(vertex_name, 0, 0);
+				add_vertex_static(table, vertex);
+			}
+			if (path==2){
+				second_vertex_name = fget_str(file);
+				vertex = find_vertex_by_name(table, vertex_name);
+				second_vertex = find_vertex_by_name(table, second_vertex_name);
+				add_edge_static(table, vertex, second_vertex);
+				free(vertex_name);
+				free(second_vertex_name);
+			}
+		}
+		//free(vertex_name);
+	}
+	//printf("E3\n");
+	fclose(file);
+	return table;
+}
+
+
+int graph_unload(Gtable *table){
+	char name[] = "mem.txt";
+	FILE *file;
+	if ((file = fopen(name, "w")) == NULL){
+		printf("File not found\n");
+		return -1;
+	}
+	fprintf(file, "{\n");
+	for (int i=0; i<table->count_line; i++){
+		fprintf(file, "%s\n", table->line[i].self->name);
+	}
+	fprintf(file, "}\n");
+	fprintf(file, "{\n");
+	Vertex *vertex = NULL;
+	int len = 0;
+	for (int i=0; i<table->count_line; i++){
+		len = list_len(table->line[i].other_list);
+		for (int j=0; j<len; j++){
+			list_take(table->line[i].other_list, j, &vertex);
+			fprintf(file, "%s\n", table->line[i].self->name);
+			fprintf(file, "%s\n", vertex->name);
+		}
+	}
+	fprintf(file, "}\n");
+	fclose(file);
+	return 0;
+}
+
+
+void timing_search(void){
+	int vertex_count = 0;
+	printf("Enter the vertex count\n");
+	get_int(&vertex_count);
+	clock_t time_start = 0;
+	clock_t time_end = 0;
+    double timing = 0;
+    double time_res = 0;
+	Gtable *table = NULL;
+	Vertex *src = NULL;
+	char *src_name = NULL;
+	int *mas = NULL;
+	table = rnd_graph_static(vertex_count, vertex_count);
+	for (int i=0; i<REPCOUNT; i++){
+		src_name = rnd_vertex_name(table, 0);
+		src = find_vertex_by_name(table, src_name);
+		free(src_name);
+		
+		time_start = clock();
+		mas = find_way_by_src(table, src);
+		time_end = clock() - time_start;
+		timing = (double)time_end / CLOCKS_PER_SEC;
+		time_res += timing;
+		free(mas);
+	}
+	del_table(table);
+	table = NULL;
+	time_res /= REPCOUNT;
+	printf("Time -> %.10f\n", time_res);
+}
 
